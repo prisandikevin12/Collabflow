@@ -1,3 +1,11 @@
+# CollabFlow
+
+Milestone 1 adds private creator profiles, onboarding, and a protected dashboard using the existing Supabase authentication flow.
+
+See the [Milestone 1 implementation and verification guide](./docs/milestone-1.md) for migration application instructions, two-user RLS checks, manual testing, actual verification results, and the complete changed-file inventory. The SQL migration is local and must be approved before applying it to the hosted project.
+
+The original starter documentation follows for reference.
+
 <a href="https://demo-nextjs-with-supabase.vercel.app/">
   <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
   <h1 align="center">Next.js and Supabase Starter Kit</h1>

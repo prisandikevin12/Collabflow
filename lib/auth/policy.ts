@@ -12,7 +12,9 @@ const publicPaths = new Set([
   "/auth/error",
 ]);
 
-const authRedirectPaths = new Set(["/", "/protected", "/auth/update-password"]);
+const authRedirectPaths = new Set([
+  "/", "/protected", "/dashboard", "/onboarding", "/auth/update-password",
+]);
 
 const emailOtpTypes = new Set([
   "signup",
@@ -25,6 +27,11 @@ const emailOtpTypes = new Set([
 
 export function isPublicPath(pathname: string): boolean {
   return publicPaths.has(pathname);
+}
+
+export function getCreatorRedirect(pathname: string, hasProfile: boolean): string | null {
+  const destination = hasProfile ? "/dashboard" : "/onboarding";
+  return pathname === destination ? null : destination;
 }
 
 export function getSafeAuthRedirect(destination: string | null): string {

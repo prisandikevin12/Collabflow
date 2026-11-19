@@ -2,12 +2,24 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   getSafeAuthRedirect,
+  getCreatorRedirect,
   isEmailOtpType,
   isPublicPath,
 } from "../lib/auth/policy.ts";
 
+test("creator routing sends users to the correct page without loops", () => {
+  for (const pathname of ["/", "/protected", "/onboarding", "/dashboard"]) {
+    for (const hasProfile of [true, false]) {
+      const expected = hasProfile ? "/dashboard" : "/onboarding";
+      const destination = getCreatorRedirect(pathname, hasProfile);
+      assert.equal(destination, pathname === expected ? null : expected);
+      if (destination) assert.equal(getCreatorRedirect(destination, hasProfile), null);
+    }
+  }
+});
+
 test("confirmation preserves existing login and recovery destinations", () => {
-  for (const path of ["/", "/protected", "/auth/update-password"]) {
+  for (const path of ["/", "/protected", "/dashboard", "/onboarding", "/auth/update-password"]) {
     assert.equal(getSafeAuthRedirect(path), path);
   }
 });
@@ -26,6 +38,11 @@ for (const destination of [
   "/protected/../auth/confirm",
   "/protected?next=https://attacker.example",
   "/protected#fragment",
+  "/dashboard?next=https://attacker.example",
+  "/onboarding#fragment",
+  "/dashboard/../auth/confirm",
+  "%2Fdashboard",
+  "/dashboard/",
   "/auth/confirm",
   "/unknown",
   "/protected\r\nLocation: https://attacker.example",
@@ -46,7 +63,7 @@ test("only existing landing and authentication routes are public", () => {
 
 test("protected, unknown, and auth-prefix lookalike routes remain guarded", () => {
   for (const path of [
-    "/protected", "/protected/settings", "/dashboard", "/api/private",
+    "/protected", "/protected/settings", "/dashboard", "/onboarding", "/api/private",
     "/login", "/login-admin", "/author", "/authentication", "/auth/admin",
     "/auth/login/admin", "/auth/login-extra", "/c/example",
   ]) {
