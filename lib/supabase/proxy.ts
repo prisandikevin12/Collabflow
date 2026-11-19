@@ -1,16 +1,31 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
+import { isPublicPath } from "../auth/policy";
+
+function redirectToLogin(request: NextRequest, response: NextResponse) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/auth/login";
+  // Do not forward private query parameters to the login page.
+  url.search = "";
+  const redirectResponse = NextResponse.redirect(url);
+  response.cookies.getAll().forEach((cookie) => {
+    redirectResponse.cookies.set(cookie);
+  });
+  return redirectResponse;
+}
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });
 
-  // If the env vars are not set, skip proxy check. You can remove this
-  // once you setup the project.
+  // Public starter pages may render without configuration; protected paths
+  // must never bypass the guard when configuration is missing.
   if (!hasEnvVars) {
-    return supabaseResponse;
+    return isPublicPath(request.nextUrl.pathname)
+      ? supabaseResponse
+      : redirectToLogin(request, supabaseResponse);
   }
 
   // With Fluid compute, don't put this client in a global environment
@@ -44,19 +59,14 @@ export async function updateSession(request: NextRequest) {
 
   // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims;
+  const { data, error } = await supabase.auth.getClaims();
+  const user = !error && data?.claims;
 
   if (
-    request.nextUrl.pathname !== "/" &&
     !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/auth")
+    !isPublicPath(request.nextUrl.pathname)
   ) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
-    return NextResponse.redirect(url);
+    return redirectToLogin(request, supabaseResponse);
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
