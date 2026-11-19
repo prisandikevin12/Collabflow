@@ -1,12 +1,19 @@
 import { updateSession } from "@/lib/supabase/proxy";
 import { type NextRequest } from "next/server";
+import { isPublicCreatorPath } from "@/lib/auth/policy";
+import { publicCreatorResponse } from "@/lib/creator/public-response";
 
 export async function proxy(request: NextRequest) {
+  if (isPublicCreatorPath(request.nextUrl.pathname)) {
+    return publicCreatorResponse(request);
+  }
   return await updateSession(request);
 }
 
 export const config = {
   matcher: [
+    // Include invalid image-like slugs and nested paths in the normal guard.
+    "/c/:path*",
     /*
      * Match all request paths except:
      * - _next/static (static files)

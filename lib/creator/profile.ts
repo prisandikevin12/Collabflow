@@ -8,7 +8,7 @@ export const RESERVED_SLUGS = [
 ] as const;
 
 export type ProfileValues = { display_name: string; slug: string; bio: string };
-export type CreatorProfile = ProfileValues & { user_id: string };
+export type CreatorProfile = ProfileValues & { user_id: string; is_public: boolean };
 export type ProfileState = {
   values: ProfileValues;
   errors?: Partial<Record<keyof ProfileValues, string>>;
@@ -59,7 +59,7 @@ export function validateProfile(form: FormData): ProfileState {
 
 export async function readOwnProfile(client: SupabaseClient, userId: string) {
   return client.from("creator_profiles")
-    .select("user_id, display_name, slug, bio")
+    .select("user_id, display_name, slug, bio, is_public")
     .eq("user_id", userId)
     .maybeSingle();
 }

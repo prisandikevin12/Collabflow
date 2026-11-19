@@ -65,7 +65,7 @@ test("protected, unknown, and auth-prefix lookalike routes remain guarded", () =
   for (const path of [
     "/protected", "/protected/settings", "/dashboard", "/onboarding", "/api/private",
     "/login", "/login-admin", "/author", "/authentication", "/auth/admin",
-    "/auth/login/admin", "/auth/login-extra", "/c/example",
+    "/auth/login/admin", "/auth/login-extra", "/c/example/settings", "/c", "/creators/example",
   ]) {
     assert.equal(isPublicPath(path), false, path);
   }

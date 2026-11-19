@@ -15,7 +15,7 @@ async function Onboarding() {
         <h1 className="max-w-sm text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">Set up your creator profile.</h1>
         <p className="mt-6 max-w-sm text-base leading-relaxed text-muted-foreground">Start with your creator profile. Choose a name and a unique slug for your workspace.</p>
         <div className="mt-8 border-l-2 border-foreground/20 pl-4 text-sm leading-relaxed text-muted-foreground">
-          You can edit these details later. Your profile is private while public collaboration pages are being built.
+          You can edit these details later. Your profile starts private. You can choose to publish your name, slug, and bio from your dashboard.
         </div>
       </div>
       <section aria-labelledby="profile-heading" className="rounded-xl border bg-background p-6 shadow-sm sm:p-8">

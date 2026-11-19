@@ -26,7 +26,13 @@ const emailOtpTypes = new Set([
 ]);
 
 export function isPublicPath(pathname: string): boolean {
-  return publicPaths.has(pathname);
+  return publicPaths.has(pathname) || isPublicCreatorPath(pathname);
+}
+
+// Exactly one route segment, including invalid slugs so they receive a 404,
+// not a login redirect. Never exempt nested paths or the entire /c prefix.
+export function isPublicCreatorPath(pathname: string): boolean {
+  return /^\/c\/[^/]+$/.test(pathname);
 }
 
 export function getCreatorRedirect(pathname: string, hasProfile: boolean): string | null {

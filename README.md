@@ -2,7 +2,11 @@
 
 Milestone 1 adds private creator profiles, onboarding, and a protected dashboard using the existing Supabase authentication flow.
 
-See the [Milestone 1 implementation and verification guide](./docs/milestone-1.md) for migration application instructions, two-user RLS checks, manual testing, actual verification results, and the complete changed-file inventory. The SQL migration is local and must be approved before applying it to the hosted project.
+The M1 migration has already been applied to Supabase. See the [Milestone 1 implementation and verification guide](./docs/milestone-1.md) for the original implementation, checks, and file inventory; its migration-status notes describe the earlier local-only stage.
+
+Milestone 2A.1 adds opt-in public creator profiles and publish/unpublish controls. Its migration has been applied successfully to the `collabflow-dev` Supabase project. The code and database security review is complete, and the implementation is conditionally approved. Existing profiles remain private; hosted database checks confirmed enabled/forced RLS on both tables, a projector without LOGIN or BYPASSRLS, anonymous read-only access to approved public columns, ownership isolation between two existing creator accounts, and transactional publish/unpublish behavior. The test transaction was rolled back.
+
+Local verification passed 97 automated tests and 10 HTTP integration tests against a local production build, plus ESLint, TypeScript, and the production build. These results are separate from the real Supabase database checks. M2A.1 application code has not been committed, pushed, or deployed; Vercel production HTTP, browser, and CDN checks remain pending. See the [Milestone 2A.1 implementation and verification guide](./docs/milestone-2a-1.md) for the evidence, remaining checks, and migration instructions for other unapplied environments. Do not reapply migrations already installed in `collabflow-dev`.
 
 The original starter documentation follows for reference.
 

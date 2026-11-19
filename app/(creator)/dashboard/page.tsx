@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Inbox, Link2 } from "lucide-react";
 import { CreatorProfileForm } from "@/components/creator-profile-form";
+import { ProfilePublicationForm } from "@/components/profile-publication-form";
 import { requireCreatorContext } from "@/lib/creator/server";
 import Loading from "../loading";
 
@@ -22,8 +23,15 @@ async function Dashboard() {
         <div className="space-y-6">
           <section aria-labelledby="link-heading" className="rounded-xl border bg-background p-6 sm:p-8">
             <div className="flex items-center gap-3"><Link2 size={18} aria-hidden="true" /><h2 id="link-heading" className="font-semibold">Your collaboration URL</h2></div>
-            <p className="mt-5 break-all rounded-lg bg-muted px-4 py-3 font-mono text-sm">/c/{profile.slug}</p>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Planned URL on this site. Public pages aren’t available yet; this link is not live.</p>
+            <div className="mt-5 break-all rounded-lg bg-muted px-4 py-3 font-mono text-sm">
+              {profile.is_public
+                ? <a href={`/c/${profile.slug}`} className="underline underline-offset-4">/c/{profile.slug}</a>
+                : <span>/c/{profile.slug}</span>}
+            </div>
+            <p className="mt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {profile.is_public ? "Published · Link is live" : "Private · Link is not live"}
+            </p>
+            <ProfilePublicationForm isPublic={profile.is_public} />
           </section>
           <section aria-labelledby="inquiries-heading" className="rounded-xl border bg-background p-6 sm:p-8">
             <div className="flex items-center justify-between gap-4"><h2 id="inquiries-heading" className="font-semibold">Collaboration inquiries</h2><span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">Coming later</span></div>
