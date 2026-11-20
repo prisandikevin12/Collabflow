@@ -4,6 +4,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { Suspense } from "react";
 import { decodePublicProfile, PUBLIC_PROFILE_HEADER } from "@/lib/creator/public-request";
+import { InquiryForm } from "@/components/inquiry-form";
 
 export const metadata: Metadata = { title: "Creator profile | CollabFlow" };
 
@@ -25,7 +26,9 @@ async function PublicProfile({ params }: { params: Promise<{ slug: string }> }) 
           <p className="mt-3 break-all text-sm text-muted-foreground">@{profile.slug}</p>
           {profile.bio && <p className="mt-8 whitespace-pre-wrap break-words text-base leading-relaxed">{profile.bio}</p>}
         </article>
-        <p className="mt-6 text-sm text-muted-foreground">Collaboration inquiries aren’t available yet.</p>
+        {process.env.INQUIRIES_ENABLED === "true" && process.env.TURNSTILE_SITE_KEY
+          ? <InquiryForm key={profile.public_id} creatorPublicId={profile.public_id} creatorSlug={profile.slug} siteKey={process.env.TURNSTILE_SITE_KEY} />
+          : <p className="mt-6 text-sm text-muted-foreground">Collaboration inquiries aren’t available yet.</p>}
       </main>
     </div>
   );

@@ -1,9 +1,11 @@
 import { updateSession } from "@/lib/supabase/proxy";
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { isPublicCreatorPath } from "@/lib/auth/policy";
 import { publicCreatorResponse } from "@/lib/creator/public-response";
 
 export async function proxy(request: NextRequest) {
+  // Exact endpoint only: intake performs its own origin and abuse checks.
+  if (request.nextUrl.pathname === "/api/inquiries") return NextResponse.next();
   if (isPublicCreatorPath(request.nextUrl.pathname)) {
     return publicCreatorResponse(request);
   }

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
@@ -8,7 +9,10 @@ import { test } from "node:test";
 
 // Run after `npm run build`. All public database traffic goes to a local
 // fixture; no hosted credentials, migrations, writes, or Auth accounts needed.
-test("production HTTP public profiles and protected-route regressions", { timeout: 60000 }, async (t) => {
+for (const inquiriesEnabled of [false, true]) {
+test(`production HTTP public profiles and protected routes (inquiries ${inquiriesEnabled ? "enabled" : "disabled"})`, { timeout: 60000 }, async (t) => {
+  assert.equal(existsSync(new URL("../../.env.local", import.meta.url)), false,
+    "Run HTTP tests in an isolated source copy without .env.local; Next loads environment files automatically.");
   const privateId = "11111111-1111-4111-8111-111111111111";
   let profile = { public_id: "55555555-5555-4555-8555-555555555555", slug: "public-creator", display_name: "Public Creator", bio: "A short public bio." };
   const requests = [];
@@ -34,7 +38,12 @@ test("production HTTP public profiles and protected-route regressions", { timeou
   await new Promise(resolve => appPortServer.close(resolve));
   const app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--hostname", "127.0.0.1", "--port", String(appPort)], {
     cwd: fileURLToPath(new URL("../../", import.meta.url)),
-    env: { ...process.env, NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${fixture.address().port}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local-public-fixture-key" },
+    env: { ...process.env, INQUIRIES_ENABLED: String(inquiriesEnabled),
+      TURNSTILE_SITE_KEY: "fixture-site-key", TURNSTILE_SECRET_KEY: "fixture-server-secret",
+      INQUIRY_HMAC_SECRET: "fixture-hmac-secret-not-real-32-characters",
+      INQUIRY_ALLOWED_ORIGINS: "https://collabflow.example", TURNSTILE_ALLOWED_HOSTNAMES: "collabflow.example",
+      INQUIRY_DATABASE_URL: "", VERCEL: "1",
+      NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${fixture.address().port}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local-public-fixture-key" },
     stdio: ["ignore", "pipe", "pipe"], windowsHide: true,
   });
   let output = "";
@@ -64,6 +73,18 @@ test("production HTTP public profiles and protected-route regressions", { timeou
     assert.match(html, /A short public bio/);
     assert.ok(!html.includes(privateId));
     assert.ok(!html.includes("private@example.test"));
+    assert.doesNotMatch(html, /fixture-server-secret|fixture-hmac-secret|collabflow_inquiry_writer/);
+    if (inquiriesEnabled) {
+      assert.match(html, /Propose a collaboration/);
+      assert.match(html, /inquiry-email/);
+      assert.match(html, /inquiry-message/);
+      assert.match(html, /Prepare verification/);
+      assert.match(html, /after 180 days/);
+      assert.match(html, /Backup copies follow the backup retention policy/);
+      assert.match(html, /fixture-site-key/);
+    } else {
+      assert.doesNotMatch(html, /Propose a collaboration|fixture-site-key/);
+    }
     assert.ok(requests.length > 0, "fixture must receive the database lookup");
     assert.ok(requests.every(r => r.path === "/rest/v1/creator_public_profiles" && r.select === "public_id,slug,display_name,bio"));
   });
@@ -141,7 +162,7 @@ test("production HTTP public profiles and protected-route regressions", { timeou
     assert.equal(response.headers.get("x-robots-tag"), "noindex");
   });
   await t.test("signed-out dashboard, onboarding, legacy and nested routes remain protected", async () => {
-    for (const path of ["/dashboard", "/onboarding", "/protected", "/dashboard?private=secret", "/c/example/settings", "/c/example/photo.png", "/c", "/api/inquiries", "/creator-not-found", "/creator-unavailable"]) {
+    for (const path of ["/dashboard", "/onboarding", "/protected", "/dashboard?private=secret", "/c/example/settings", "/c/example/photo.png", "/c", "/api/inquiries/private", "/api/inquiries-extra", "/creator-not-found", "/creator-unavailable"]) {
       const response = await fetch(`${base}${path}`, { redirect: "manual" });
       assert.equal(response.status, 307, path);
       const target = new URL(response.headers.get("location"), base);
@@ -155,4 +176,38 @@ test("production HTTP public profiles and protected-route regressions", { timeou
       await response.text();
     }
   });
+  await t.test("inquiry endpoint enforces feature flag and non-POST requests cannot read data", async () => {
+    const response = await fetch(`${base}/api/inquiries`, { method: "POST", redirect: "manual", body: "{}" });
+    assert.equal(response.status, inquiriesEnabled ? 403 : 404);
+    assert.equal(response.headers.get("location"), null);
+    assertUncached(response);
+    for (const method of ["GET", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
+      const rejected = await fetch(`${base}/api/inquiries`, { method, redirect: "manual" });
+      assert.equal(rejected.status, 405);
+      assert.equal(rejected.headers.get("allow"), "POST");
+      assertUncached(rejected);
+      assert.equal(await rejected.text(), "");
+    }
+  });
+  if (inquiriesEnabled) await t.test("production inquiry route fails closed before external calls", async () => {
+    const headers = { origin: "https://collabflow.example", "content-type": "application/json", "x-vercel-forwarded-for": "203.0.113.1" };
+    const data = { creatorPublicId: "55555555-5555-4555-8555-555555555555", creatorSlug: "public-creator",
+      submissionId: "66666666-6666-4666-8666-666666666666", senderName: "Alice", senderEmail: "alice@example.test",
+      company: "", message: "A collaboration proposal.", website: "", turnstileToken: "fixture-token" };
+    for (const [body, overrides, status] of [
+      ["{", {}, 400],
+      [JSON.stringify(data), { origin: "https://attacker.example" }, 403],
+      [JSON.stringify(data), { "x-vercel-forwarded-for": "", "x-forwarded-for": "203.0.113.1" }, 503],
+      [JSON.stringify({ ...data, website: "bot.example" }), {}, 400],
+      [JSON.stringify({ ...data, owner_id: privateId }), {}, 400],
+      [JSON.stringify(data), {}, 503], // No writer credential: never fall back to an elevated key.
+    ]) {
+      const response = await fetch(`${base}/api/inquiries`, { method: "POST", headers: { ...headers, ...overrides }, body, redirect: "manual" });
+      assert.equal(response.status, status);
+      assertUncached(response);
+      assert.equal(response.headers.get("location"), null);
+      assert.doesNotMatch(await response.text(), /fixture-token|alice@example|fixture-server-secret|postgres|INQUIRY_DATABASE_URL/);
+    }
+  });
 });
+}
