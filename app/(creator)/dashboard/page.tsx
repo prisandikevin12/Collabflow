@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Inbox, Link2 } from "lucide-react";
@@ -34,11 +35,12 @@ async function Dashboard() {
             <ProfilePublicationForm isPublic={profile.is_public} />
           </section>
           <section aria-labelledby="inquiries-heading" className="rounded-xl border bg-background p-6 sm:p-8">
-            <div className="flex items-center justify-between gap-4"><h2 id="inquiries-heading" className="font-semibold">Collaboration inquiries</h2><span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">Coming later</span></div>
+            <h2 id="inquiries-heading" className="font-semibold">Collaboration inquiries</h2>
             <div className="flex flex-col items-center py-12 text-center">
               <div className="mb-5 rounded-full bg-muted p-4"><Inbox size={24} className="text-muted-foreground" aria-hidden="true" /></div>
-              <h3 className="font-medium">No inquiries yet</h3>
-              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">Once inquiries are available, you’ll be able to review collaboration requests here.</p>
+              <h3 className="font-medium">Your creator inbox</h3>
+              <p className="mt-2 max-w-xs text-sm leading-relaxed text-muted-foreground">Read collaboration proposals and sender contact details in your private inbox.</p>
+              <Link href="/dashboard/inquiries" prefetch={false} className="mt-5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Open inbox</Link>
             </div>
           </section>
         </div>

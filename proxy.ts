@@ -9,7 +9,12 @@ export async function proxy(request: NextRequest) {
   if (isPublicCreatorPath(request.nextUrl.pathname)) {
     return publicCreatorResponse(request);
   }
-  return await updateSession(request);
+  const response = await updateSession(request);
+  if (request.nextUrl.pathname === "/dashboard/inquiries" || request.nextUrl.pathname.startsWith("/dashboard/inquiries/")) {
+    response.headers.set("Cache-Control", "private, no-store, max-age=0");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  }
+  return response;
 }
 
 export const config = {

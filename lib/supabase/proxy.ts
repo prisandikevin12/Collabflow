@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "../utils";
 import { isPublicPath } from "../auth/policy";
 
+function copyCacheHeaders(from: NextResponse, to: NextResponse) {
+  for (const name of ["Cache-Control", "Expires", "Pragma"]) {
+    const value = from.headers.get(name);
+    if (value !== null) to.headers.set(name, value);
+  }
+}
+
 function redirectToLogin(request: NextRequest, response: NextResponse) {
   const url = request.nextUrl.clone();
   url.pathname = "/auth/login";
@@ -12,6 +19,7 @@ function redirectToLogin(request: NextRequest, response: NextResponse) {
   response.cookies.getAll().forEach((cookie) => {
     redirectResponse.cookies.set(cookie);
   });
+  copyCacheHeaders(response, redirectResponse);
   return redirectResponse;
 }
 
@@ -38,16 +46,22 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
+          const previousResponse = supabaseResponse;
           supabaseResponse = NextResponse.next({
             request,
           });
+          // SSR sends cache headers only on its first cookie write. Preserve
+          // them and earlier cookie writes if it calls setAll again.
+          copyCacheHeaders(previousResponse, supabaseResponse);
+          previousResponse.cookies.getAll().forEach(cookie => supabaseResponse.cookies.set(cookie));
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
+          Object.entries(headers).forEach(([name, value]) => supabaseResponse.headers.set(name, value));
         },
       },
     },

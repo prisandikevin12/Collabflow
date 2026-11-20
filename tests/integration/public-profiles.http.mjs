@@ -162,7 +162,7 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
     assert.equal(response.headers.get("x-robots-tag"), "noindex");
   });
   await t.test("signed-out dashboard, onboarding, legacy and nested routes remain protected", async () => {
-    for (const path of ["/dashboard", "/onboarding", "/protected", "/dashboard?private=secret", "/c/example/settings", "/c/example/photo.png", "/c", "/api/inquiries/private", "/api/inquiries-extra", "/creator-not-found", "/creator-unavailable"]) {
+    for (const path of ["/dashboard", "/dashboard/inquiries", "/dashboard/inquiries/aaaaaaaa-aaaa-4aaa-8aaa-000000000001", "/onboarding", "/protected", "/dashboard?private=secret", "/c/example/settings", "/c/example/photo.png", "/c", "/api/inquiries/private", "/api/inquiries-extra", "/creator-not-found", "/creator-unavailable"]) {
       const response = await fetch(`${base}${path}`, { redirect: "manual" });
       assert.equal(response.status, 307, path);
       const target = new URL(response.headers.get("location"), base);
