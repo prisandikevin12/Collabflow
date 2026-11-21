@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { handleInquiry } from "../lib/inquiries/intake.ts";
+import { acceptedReceipt, submissionSnapshot } from "../lib/inquiries/client.ts";
 
 const file = name => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const hash = text => createHash("sha256").update(text).digest("hex");
@@ -243,6 +244,64 @@ test(`M2A.2 intake permissions, quotas and idempotency (retention ${retention ? 
     const retry = await handleInquiry(request(), cfg, store, verify);
     assert.equal(retry.status, 200); assert.deepEqual(await retry.json(), await first.json());
     assert.equal(await count(), 1); assert.equal(verifications, 1);
+  });
+
+  await t.test("lost response after commit: unchanged form retry reuses submission ID and original receipt with one inquiry", async () => {
+    // Keep this last: unlike the rollback-isolated cases, these dummy writes
+    // really commit in this disposable database before the response is lost.
+    const cfg = { enabled: true, origins: ["https://collabflow.example"], hostnames: ["collabflow.example"], vercel: true, turnstileSecret: "fixture", hmacSecret: "test-secret-".repeat(4) };
+    const fields = { senderName: "Retry Sender", senderEmail: "retry@example.test", company: "Dummy Brand", message: "A dummy proposal whose first response is lost.", website: "" };
+    const originalId = "66666666-6666-4666-8666-666666666666";
+    let generatedIds = 0;
+    const makeId = () => ++generatedIds === 1 ? originalId : "77777777-7777-4777-8777-777777777777";
+    const originalSnapshot = submissionSnapshot(null, creator, "public-creator", fields, makeId);
+    async function committed(run) {
+      await db.exec("begin");
+      try {
+        const result = await run();
+        await db.exec("commit");
+        return result;
+      } catch (error) { await db.exec("rollback"); throw error; }
+    }
+    const store = () => ({
+      begin: x => committed(() => begin({ ip: x.ipHash, email: x.emailHash, creatorId: x.creatorId, submission: x.submissionId, fingerprint: x.fingerprint })),
+      finish: (ticket, value, token) => committed(() => finish(ticket, { slug: value.creatorSlug, token, name: value.senderName, email: value.senderEmail, company: value.company, message: value.message })),
+    });
+    let verifications = 0;
+    const verify = async () => { verifications++; return true; }; // No external Turnstile calls.
+    const request = (snapshot, token) => new Request(cfg.origins[0] + "/api/inquiries", {
+      method: "POST", headers: { origin: cfg.origins[0], "content-type": "application/json", "x-vercel-forwarded-for": "203.0.113.1" },
+      body: JSON.stringify({ ...fields, creatorPublicId: creator, creatorSlug: "public-creator", submissionId: snapshot.id, turnstileToken: token }),
+    });
+    let originalReceipt;
+    // Simulate transport failure only AFTER handleInquiry has committed the
+    // inquiry and generated its response. No response reaches the caller.
+    async function lostResponse() {
+      const response = await handleInquiry(request(originalSnapshot, "first-dummy-challenge"), cfg, store, verify);
+      assert.equal(response.status, 200);
+      originalReceipt = (await response.json()).receipt;
+      throw new TypeError("Simulated connection loss after database commit");
+    }
+    assert.equal(await count(), 0);
+    await assert.rejects(lostResponse(), { name: "TypeError", message: "Simulated connection loss after database commit" });
+    const saved = (await db.query("select id, sender_email, message from collabflow_private.collaboration_inquiries")).rows;
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].sender_email, fields.senderEmail);
+    assert.equal(saved[0].message, fields.message);
+    const receipts = () => db.query("select submission_id, receipt from collabflow_private.inquiry_receipts");
+    assert.deepEqual((await receipts()).rows, [{ submission_id: originalId, receipt: originalReceipt }]);
+
+    // Same mounted form, unchanged fields, newly prepared verification token.
+    const retrySnapshot = submissionSnapshot(originalSnapshot, creator, "public-creator", { ...fields }, makeId);
+    assert.equal(retrySnapshot.id, originalId);
+    assert.equal(generatedIds, 1);
+    const retry = await handleInquiry(request(retrySnapshot, "fresh-dummy-challenge"), cfg, store, verify);
+    assert.equal(retry.status, 200);
+    assert.equal(acceptedReceipt(retry.status, await retry.json()), originalReceipt);
+    assert.equal(await count(), 1);
+    assert.deepEqual((await db.query("select id, sender_email, message from collabflow_private.collaboration_inquiries")).rows, saved);
+    assert.deepEqual((await receipts()).rows, [{ submission_id: originalId, receipt: originalReceipt }]);
+    assert.equal(verifications, 1, "An existing receipt is returned before verifying another challenge");
   });
 });
 
