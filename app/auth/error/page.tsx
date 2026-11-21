@@ -1,32 +1,37 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DEFAULT_AUTH_ERROR_MESSAGE,
+  getAuthErrorMessage,
+} from "@/lib/auth/policy";
+
+export const metadata: Metadata = {
+  title: "Authentication error | CollabFlow",
+  robots: { index: false, follow: false },
+};
 
 async function ErrorContent({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string | string[] }>;
 }) {
   const params = await searchParams;
+  const message = getAuthErrorMessage(params?.error);
 
   return (
-    <>
-      {params?.error ? (
-        <p className="text-sm text-muted-foreground">
-          Code error: {params.error}
-        </p>
-      ) : (
-        <p className="text-sm text-muted-foreground">
-          An unspecified error occurred.
-        </p>
-      )}
-    </>
+    <p role="alert" className="text-sm text-muted-foreground">
+      {message}
+    </p>
   );
 }
 
 export default function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ error: string }>;
+  searchParams: Promise<{ error?: string | string[] }>;
 }) {
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
@@ -38,10 +43,19 @@ export default function Page({
                 Sorry, something went wrong.
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <Suspense>
+            <CardContent className="flex flex-col gap-6">
+              <Suspense
+                fallback={
+                  <p className="text-sm text-muted-foreground">
+                    {DEFAULT_AUTH_ERROR_MESSAGE}
+                  </p>
+                }
+              >
                 <ErrorContent searchParams={searchParams} />
               </Suspense>
+              <Button asChild className="w-full">
+                <Link href="/auth/login">Back to login</Link>
+              </Button>
             </CardContent>
           </Card>
         </div>

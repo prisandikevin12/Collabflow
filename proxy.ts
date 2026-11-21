@@ -1,6 +1,10 @@
 import { updateSession } from "@/lib/supabase/proxy";
 import { NextResponse, type NextRequest } from "next/server";
-import { isPublicCreatorPath } from "@/lib/auth/policy";
+import {
+  applyPrivateRouteHeaders,
+  isPrivateAppPath,
+  isPublicCreatorPath,
+} from "@/lib/auth/policy";
 import { publicCreatorResponse } from "@/lib/creator/public-response";
 
 export async function proxy(request: NextRequest) {
@@ -10,9 +14,8 @@ export async function proxy(request: NextRequest) {
     return publicCreatorResponse(request);
   }
   const response = await updateSession(request);
-  if (request.nextUrl.pathname === "/dashboard/inquiries" || request.nextUrl.pathname.startsWith("/dashboard/inquiries/")) {
-    response.headers.set("Cache-Control", "private, no-store, max-age=0");
-    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+  if (isPrivateAppPath(request.nextUrl.pathname)) {
+    applyPrivateRouteHeaders(response.headers);
   }
   return response;
 }

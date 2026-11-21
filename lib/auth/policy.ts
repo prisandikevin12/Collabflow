@@ -25,6 +25,17 @@ const emailOtpTypes = new Set([
   "email",
 ]);
 
+export const PRIVATE_CACHE_CONTROL = "private, no-store, max-age=0";
+export const PRIVATE_ROBOTS_TAG = "noindex, nofollow";
+
+export const DEFAULT_AUTH_ERROR_MESSAGE =
+  "We couldn’t complete your authentication request. Please sign in or request a new link.";
+
+const authErrorMessages = new Map<string, string>([
+  ["confirm_failed", "Unable to confirm this link. Please request a new one."],
+  ["invalid_link", "Invalid confirmation link. Please request a new one."],
+]);
+
 export function isPublicPath(pathname: string): boolean {
   return publicPaths.has(pathname) || isPublicCreatorPath(pathname);
 }
@@ -33,6 +44,29 @@ export function isPublicPath(pathname: string): boolean {
 // not a login redirect. Never exempt nested paths or the entire /c prefix.
 export function isPublicCreatorPath(pathname: string): boolean {
   return /^\/c\/[^/]+$/.test(pathname);
+}
+
+export function isPrivateAppPath(pathname: string): boolean {
+  return (
+    pathname === "/dashboard" ||
+    pathname.startsWith("/dashboard/") ||
+    pathname === "/onboarding" ||
+    pathname.startsWith("/onboarding/") ||
+    pathname === "/protected" ||
+    pathname.startsWith("/protected/")
+  );
+}
+
+export function applyPrivateRouteHeaders(headers: Pick<Headers, "set">): void {
+  headers.set("Cache-Control", PRIVATE_CACHE_CONTROL);
+  headers.set("X-Robots-Tag", PRIVATE_ROBOTS_TAG);
+}
+
+export function getAuthErrorMessage(
+  code: string | string[] | null | undefined,
+): string {
+  if (typeof code !== "string") return DEFAULT_AUTH_ERROR_MESSAGE;
+  return authErrorMessages.get(code) ?? DEFAULT_AUTH_ERROR_MESSAGE;
 }
 
 export function getCreatorRedirect(pathname: string, hasProfile: boolean): string | null {

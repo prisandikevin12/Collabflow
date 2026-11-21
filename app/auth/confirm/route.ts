@@ -20,13 +20,11 @@ export async function GET(request: NextRequest) {
       // Only redirect to an explicitly supported destination.
       redirect(next);
     } else {
-      // redirect the user to an error page with some instructions
-      redirect(
-        "/auth/error?error=Unable%20to%20confirm%20this%20link.%20Please%20request%20a%20new%20one.",
-      );
+      // Redirect with a fixed allowlisted error code; never pass raw error prose.
+      redirect("/auth/error?error=confirm_failed");
     }
   }
 
-  // redirect the user to an error page with some instructions
-  redirect("/auth/error?error=Invalid%20confirmation%20link.");
+  // Redirect with a fixed allowlisted error code.
+  redirect("/auth/error?error=invalid_link");
 }

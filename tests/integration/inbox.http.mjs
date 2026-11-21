@@ -12,7 +12,7 @@ import { test } from "node:test";
 // inbox-database.test.mjs; this tests cookies, rendering, routing and caching.
 test("production creator inbox HTTP responses remain private", { timeout: 90000 }, async t => {
   assert.equal(existsSync(new URL("../../.env.local", import.meta.url)),false,"Use an isolated source copy without environment files");
-  const a="11111111-1111-4111-8111-111111111111", b="22222222-2222-4222-8222-222222222222";
+  const a="11111111-1111-4111-8111-111111111111", b="22222222-2222-4222-8222-222222222222", c="33333333-3333-4333-8333-333333333333";
   const id="aaaaaaaa-aaaa-4aaa-8aaa-000000000001";
   const content={id,sender_name:"Private Sender A",sender_email:"sender-a@example.test",company:"Private Brand A",message:"<script>Never execute me</script>\nFull private proposal",created_at:"2026-11-20T06:00:00.123456+00:00"};
   let mode="normal"; const rpcCalls=[];
@@ -27,7 +27,7 @@ test("production creator inbox HTTP responses remain private", { timeout: 90000 
     if(!expired)sessions.set(token,uid);
     return "sb-127-auth-token=base64-"+encode({access_token:token,refresh_token:"local-fixture-refresh",expires_at:exp,expires_in:3600,token_type:"bearer",user:user(uid)});
   }
-  const aCookie=cookie(a),bCookie=cookie(b),expiredCookie=cookie(a,true);
+  const aCookie=cookie(a),bCookie=cookie(b),cCookie=cookie(c),expiredCookie=cookie(a,true);
   const fixture=createServer(async(req,res)=>{
     const path=new URL(req.url,"http://localhost").pathname;
     const uid=sessions.get((req.headers.authorization??"").replace(/^Bearer /,""));
@@ -42,7 +42,7 @@ test("production creator inbox HTTP responses remain private", { timeout: 90000 
     }
     if(path==="/rest/v1/creator_public_profiles")return send(200,[{public_id:id,slug:"fixture-creator",display_name:"Public Creator",bio:null}]);
     if(!uid)return send(401,{code:"PGRST301",message:"No fixture session"});
-    if(path==="/rest/v1/creator_profiles")return send(200,{user_id:uid,display_name:"Creator",slug:"fixture-creator",bio:null,is_public:false});
+    if(path==="/rest/v1/creator_profiles")return send(200,uid===c?null:{user_id:uid,display_name:"Creator",slug:"fixture-creator",bio:null,is_public:false});
     if(path.startsWith("/rest/v1/rpc/")){
       let body="";for await(const part of req)body+=part;
       const args=JSON.parse(body||"{}");rpcCalls.push({path,uid,args});
@@ -75,22 +75,45 @@ test("production creator inbox HTTP responses remain private", { timeout: 90000 
   for(let n=0;n<150&&!output.includes("Ready in")&&app.exitCode===null;n++)await delay(100);
   assert.match(output,/Ready in/);
   const get=(path,cookieValue,headers={})=>fetch(`http://127.0.0.1:${port}${path}`,{redirect:"manual",headers:{...(cookieValue?{cookie:cookieValue}:{}),...headers}});
-  const privateResponse=r=>assert.match(r.headers.get("cache-control")??"",/private.*no-store/);
+  const privateResponse=r=>{
+    assert.equal(r.headers.get("cache-control"),"private, no-store, max-age=0");
+    assert.equal(r.headers.get("x-robots-tag"),"noindex, nofollow");
+  };
   await t.test("missing and expired sessions redirect without private content or query forwarding",async()=>{
-    for(const session of [undefined,expiredCookie]){
-      const r=await get(`/dashboard/inquiries/${id}?creatorId=${a}`,session);privateResponse(r);
-      assert.equal(r.status,307);assert.equal(new URL(r.headers.get("location"),r.url).pathname,"/auth/login");
-      assert.equal(new URL(r.headers.get("location"),r.url).search,"");assert.doesNotMatch(await r.text(),/Private Sender|sender-a@example/);
+    for(const path of [`/dashboard/inquiries/${id}`, "/dashboard", "/onboarding", "/protected"]){
+      for(const session of [undefined,expiredCookie]){
+        const r=await get(`${path}?creatorId=${a}`,session);privateResponse(r);
+        assert.equal(r.status,307,path);assert.equal(new URL(r.headers.get("location"),r.url).pathname,"/auth/login");
+        assert.equal(new URL(r.headers.get("location"),r.url).search,"");assert.doesNotMatch(await r.text(),/Private Sender|sender-a@example/);
+      }
     }
+  });
+  await t.test("authenticated private route families send private no-store headers without refresh",async()=>{
+    const dashboard=await get("/dashboard",aCookie);privateResponse(dashboard);
+    assert.equal(dashboard.status,200);assert.match(await dashboard.text(),/Welcome,\s*(?:<!-- -->)?Creator/);
+
+    const dashboardRsc=await get("/dashboard?_rsc",aCookie,{RSC:"1"});privateResponse(dashboardRsc);
+    assert.equal(dashboardRsc.status,200);await dashboardRsc.text();
+
+    const onboarding=await get("/onboarding",cCookie);privateResponse(onboarding);
+    assert.equal(onboarding.status,200);assert.match(await onboarding.text(),/Set up your creator profile/);
+
+    const onboardingRedirect=await get("/onboarding",aCookie);privateResponse(onboardingRedirect);
+    assert.ok([200,307].includes(onboardingRedirect.status));await onboardingRedirect.text();
+
+    const protectedRoute=await get("/protected",aCookie);privateResponse(protectedRoute);
+    assert.ok([200,307].includes(protectedRoute.status));await protectedRoute.text();
   });
   await t.test("successful refresh forwards cookies to rendering and keeps private cache headers",async()=>{
     refreshSucceeds=true;
     try {
-      for(const path of ["/dashboard/inquiries", "/dashboard", "/auth/login"]){
+      for(const path of ["/dashboard/inquiries", "/dashboard", "/onboarding", "/protected", "/auth/login"]){
         const before=refreshCalls;
-        const r=await get(path,expiredCookie);privateResponse(r);
-        assert.equal(r.status,200);
-        assert.equal(refreshCalls,before+1,"Rendering must reuse the refreshed request cookie");
+        const r=await get(path,expiredCookie);
+        if(path==="/auth/login")assert.match(r.headers.get("cache-control")??"",/private.*no-store/);
+        else privateResponse(r);
+        assert.ok([200,307].includes(r.status),`Unexpected ${r.status} at ${path}`);
+        assert.equal(refreshCalls,before+1,`Rendering must reuse the refreshed request cookie for ${path}`);
         assert.match(r.headers.get("set-cookie")??"",/sb-127-auth-token=base64-/);
         assert.equal(r.headers.get("expires"),"0");assert.equal(r.headers.get("pragma"),"no-cache");
         const body=await r.text();
@@ -99,7 +122,7 @@ test("production creator inbox HTTP responses remain private", { timeout: 90000 
     } finally {refreshSucceeds=false;}
   });
   await t.test("failed refresh preserves cookie clearing and cache headers on login redirects",async()=>{
-    for(const path of ["/dashboard/inquiries", "/dashboard"]){
+    for(const path of ["/dashboard/inquiries", "/dashboard", "/onboarding", "/protected"]){
       const r=await get(`${path}?private=do-not-forward`,expiredCookie);privateResponse(r);
       assert.equal(r.status,307);
       const target=new URL(r.headers.get("location"),r.url);

@@ -162,11 +162,23 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
     assert.equal(response.headers.get("x-robots-tag"), "noindex");
   });
   await t.test("signed-out dashboard, onboarding, legacy and nested routes remain protected", async () => {
+    const privatePaths = new Set([
+      "/dashboard",
+      "/dashboard/inquiries",
+      "/dashboard/inquiries/aaaaaaaa-aaaa-4aaa-8aaa-000000000001",
+      "/onboarding",
+      "/protected",
+      "/dashboard?private=secret",
+    ]);
     for (const path of ["/dashboard", "/dashboard/inquiries", "/dashboard/inquiries/aaaaaaaa-aaaa-4aaa-8aaa-000000000001", "/onboarding", "/protected", "/dashboard?private=secret", "/c/example/settings", "/c/example/photo.png", "/c", "/api/inquiries/private", "/api/inquiries-extra", "/creator-not-found", "/creator-unavailable"]) {
       const response = await fetch(`${base}${path}`, { redirect: "manual" });
       assert.equal(response.status, 307, path);
       const target = new URL(response.headers.get("location"), base);
       assert.equal(target.pathname, "/auth/login"); assert.equal(target.search, "");
+      if (privatePaths.has(path)) {
+        assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0", path);
+        assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", path);
+      }
     }
   });
   await t.test("M1 public landing and authentication entry routes remain available", async () => {
@@ -175,6 +187,43 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
       assert.equal(response.status, 200, path);
       await response.text();
     }
+  });
+  await t.test("auth error page never reflects arbitrary query parameters and links back to login", async () => {
+    for (const query of [
+      "",
+      "?error=Your+account+is+locked+call+555-0199",
+      "?error=%3Cscript%3Ealert(1)%3C%2Fscript%3E",
+      "?error=confirm_failed&error=extra",
+      "?error=toString",
+    ]) {
+      const response = await fetch(`${base}/auth/error${query}`, { redirect: "manual" });
+      assert.equal(response.status, 200, query);
+      const html = await response.text();
+      // Exclude Next's internal router URL flight script; verify visible DOM markup only.
+      const visibleHtml = html.replace(/<script\b[\s\S]*?<\/script>/gi, "");
+      assert.match(visibleHtml, /<p role="alert"[^>]*>We couldn’t complete your authentication request\. Please sign in or request a new link\.<\/p>/);
+      assert.doesNotMatch(visibleHtml, /Code error:|555-0199|alert\(1\)|toString/);
+      assert.match(visibleHtml, /href="\/auth\/login"/);
+    }
+    const confirmFailed = await fetch(`${base}/auth/error?error=confirm_failed`, { redirect: "manual" });
+    assert.equal(confirmFailed.status, 200);
+    assert.match(
+      (await confirmFailed.text()).replace(/<script\b[\s\S]*?<\/script>/gi, ""),
+      /<p role="alert"[^>]*>Unable to confirm this link\. Please request a new one\.<\/p>/,
+    );
+
+    const invalidLink = await fetch(`${base}/auth/error?error=invalid_link`, { redirect: "manual" });
+    assert.equal(invalidLink.status, 200);
+    assert.match(
+      (await invalidLink.text()).replace(/<script\b[\s\S]*?<\/script>/gi, ""),
+      /<p role="alert"[^>]*>Invalid confirmation link\. Please request a new one\.<\/p>/,
+    );
+
+    const confirmRedirect = await fetch(`${base}/auth/confirm`, { redirect: "manual" });
+    assert.equal(confirmRedirect.status, 307);
+    const target = new URL(confirmRedirect.headers.get("location"), base);
+    assert.equal(target.pathname, "/auth/error");
+    assert.equal(target.search, "?error=invalid_link");
   });
   await t.test("inquiry endpoint enforces feature flag and non-POST requests cannot read data", async () => {
     const response = await fetch(`${base}/api/inquiries`, { method: "POST", redirect: "manual", body: "{}" });
