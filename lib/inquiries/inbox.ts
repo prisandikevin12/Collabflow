@@ -1,6 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const INBOX_PAGE_SIZE = 20;
+// Standard external referral tags ignored on the inbox list without reading or propagating values.
+const IGNORED_INBOX_QUERY_PARAMS = new Set([
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+]);
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type Cursor = { created_at: string; id: string };
 export type InquiryPreview = Cursor & { sender_name: string; company: string | null; message_preview: string };
@@ -63,7 +71,10 @@ function preview(value: unknown): InquiryPreview | null {
 export async function readInbox(client: SupabaseClient, params: Record<string, string | string[] | undefined>): Promise<InboxResult> {
   const denied = await access(client);
   if (denied) return denied;
-  if (Object.keys(params).some(key => key !== "cursor") || Array.isArray(params.cursor)) return { status: "invalid" };
+  if (
+    Object.keys(params).some(key => key !== "cursor" && !IGNORED_INBOX_QUERY_PARAMS.has(key))
+    || Array.isArray(params.cursor)
+  ) return { status: "invalid" };
   const cursor = params.cursor === undefined ? null : parseInboxCursor(params.cursor);
   if (params.cursor !== undefined && !cursor) return { status: "invalid" };
   try {

@@ -54,12 +54,63 @@ test("bounded cursor pagination preserves microseconds and strips extra private 
 });
 test("forged owner parameters and malformed cursors cannot reach inquiry queries", async () => {
   const encode = v => Buffer.from(JSON.stringify(v)).toString("base64url");
-  for (const params of [{ creatorId: id }, { user_id: id }, { cursor: ["a", "b"] }, { cursor: "" }, { cursor: "x".repeat(257) },
-    { cursor: encode({ ...item, creatorId: id }) }, { cursor: encode({ id, created_at: "infinity" }) }, { cursor: "../" }]) {
+  const validCursor = encode({ id, created_at: item.created_at });
+  for (const params of [
+    { creatorId: id },
+    { user_id: id },
+    { unknown: "1" },
+    { utm_extra: "1" },
+    { UTM_SOURCE: "chatgpt.com" },
+    { utm_source: "chatgpt.com", unknown: "1" },
+    { cursor: ["a", "b"] },
+    { cursor: [validCursor, validCursor], utm_source: "chatgpt.com" },
+    { cursor: "", utm_source: "chatgpt.com" },
+    { cursor: "x".repeat(257) },
+    { cursor: encode({ ...item, creatorId: id }) },
+    { cursor: encode({ id, created_at: "infinity" }) },
+    { cursor: "../", utm_source: "chatgpt.com" },
+  ]) {
     const f = fixture();
     assert.deepEqual(await readInbox(f.client, params), { status: "invalid" });
     assert.ok(!f.calls.some(c => c[0] === "rpc"));
   }
+});
+
+test("recognized UTM tracking parameters are safely ignored without affecting pagination or RPC calls", async () => {
+  const data = Array.from({ length: 21 }, (_, n) => ({
+    ...item,
+    id: `22222222-2222-4222-8222-${String(100 - n).padStart(12, "0")}`,
+  }));
+
+  const singleUtm = fixture({ data });
+  const singleResult = await readInbox(singleUtm.client, { utm_source: "chatgpt.com" });
+  assert.equal(singleResult.status, "ready");
+  assert.equal(singleResult.items.length, INBOX_PAGE_SIZE);
+  assert.deepEqual(singleUtm.calls.find(c => c[0] === "rpc"), [
+    "rpc",
+    "list_creator_inquiries",
+    { p_before_created_at: null, p_before_id: null, p_limit: 21 },
+  ]);
+  assert.doesNotMatch(JSON.stringify(singleResult), /utm_source|chatgpt\.com/);
+
+  const multiUtm = fixture({ data: [item] });
+  const multiResult = await readInbox(multiUtm.client, {
+    cursor: singleResult.nextCursor,
+    utm_source: "chatgpt.com",
+    utm_medium: "referral",
+    utm_campaign: "portfolio_review",
+    utm_content: ["hero", "footer"],
+    utm_term: "saas",
+  });
+  assert.equal(multiResult.status, "ready");
+  assert.equal(multiResult.items.length, 1);
+  assert.equal(multiResult.nextCursor, null);
+  assert.deepEqual(multiUtm.calls.find(c => c[0] === "rpc")[2], {
+    p_before_created_at: item.created_at,
+    p_before_id: data[19].id,
+    p_limit: 21,
+  });
+  assert.doesNotMatch(JSON.stringify(multiUtm.calls), /utm_|chatgpt\.com|portfolio_review/);
 });
 test("detail returns only approved fields; missing and malformed IDs are unavailable", async () => {
   const data = [{ ...item, sender_email: "brand@example.test", message: "<script>plain text</script>", creator_public_id: owner, token_hash: "private" }];

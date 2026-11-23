@@ -159,12 +159,35 @@ test("production creator inbox HTTP responses remain private", { timeout: 90000 
   });
   await t.test("empty, forged-owner and database-error states are safe",async()=>{
     const empty=await get("/dashboard/inquiries",bCookie);assert.match(await empty.text(),/No inquiries to show/);
-    const count=rpcCalls.length;const forged=await get(`/dashboard/inquiries?creatorId=${a}`,bCookie);
-    assert.match(await forged.text(),/Invalid inbox page/);assert.equal(rpcCalls.length,count);
+    const count=rpcCalls.length;
+    for(const badPath of [
+      `/dashboard/inquiries?creatorId=${a}`,
+      "/dashboard/inquiries?utm_source=chatgpt.com&unknown=1",
+      "/dashboard/inquiries?cursor=bad&utm_source=chatgpt.com",
+      `/dashboard/inquiries?cursor=${Buffer.from(JSON.stringify({id,created_at:content.created_at})).toString("base64url")}&cursor=${Buffer.from(JSON.stringify({id,created_at:content.created_at})).toString("base64url")}`,
+    ]){
+      const rejected=await get(badPath,bCookie);privateResponse(rejected);
+      assert.match(await rejected.text(),/Invalid inbox page/,badPath);
+    }
+    assert.equal(rpcCalls.length,count);
     mode="error";
     const failed=await get("/dashboard/inquiries",aCookie);privateResponse(failed);
     assert.doesNotMatch(await failed.text(),/PRIVATE-UPSTREAM-ERROR|sender-a@example/);
     mode="normal";
+  });
+  await t.test("recognized UTM parameters load the inbox without propagating tracking values",async()=>{
+    for(const path of [
+      "/dashboard/inquiries?utm_source=chatgpt.com",
+      "/dashboard/inquiries?utm_source=chatgpt.com&utm_medium=referral&utm_campaign=launch&utm_content=cta&utm_term=creator",
+    ]){
+      const r=await get(path,aCookie);privateResponse(r);assert.equal(r.status,200);
+      const html=await r.text();
+      const visibleHtml=html.replace(/<script\b[\s\S]*?<\/script>/gi,"");
+      assert.match(visibleHtml,/Private Sender A/);
+      assert.doesNotMatch(visibleHtml,/Invalid inbox page|utm_source|chatgpt\.com/);
+      assert.match(visibleHtml,/href="\/dashboard\/inquiries\?cursor=[A-Za-z0-9_-]+"/);
+      assert.doesNotMatch(visibleHtml,/href="\/dashboard\/inquiries[^"]*utm_/);
+    }
   });
   await t.test("calendar-invalid cursors render invalid state without querying inquiries",async()=>{
     const count=rpcCalls.length;
