@@ -15,6 +15,28 @@ Creators who publish a business email address online face spam, scraping, and un
 
 The project is intentionally scoped as a focused MVP rather than a creator marketplace.
 
+## Screenshots
+
+Captured from the `collabflow-dev` testing environment using a test creator account (`CollabFlow Tester`).
+
+### Creator Dashboard
+
+Authenticated creator workspace showing the live `/c/collabflow-tester` publication toggle, profile editor, and entry point to the private inbox.
+
+![CollabFlow creator dashboard showing publication controls, profile editor, and inbox entry](./docs/images/creator-dashboard.png)
+
+### Public Creator Profile (Inquiry Intake Disabled)
+
+Published creator page at `/c/collabflow-tester` displaying only the approved public fields (display name, slug, and bio) with public inquiry intake disabled (`INQUIRIES_ENABLED=false`).
+
+![CollabFlow public creator profile with public inquiry intake disabled](./docs/images/public-creator-profile.png)
+
+### Collaboration Inbox (Empty State)
+
+Authenticated read-only Creator Inbox at `/dashboard/inquiries` shown in its empty state with no received inquiries displayed.
+
+![CollabFlow collaboration inbox showing the empty state](./docs/images/creator-inbox-empty.png)
+
 ## Implemented Features
 
 - **Creator authentication and session boundaries:** Email/password sign-up, email confirmation (`/auth/confirm` with an exact redirect allowlist), sign-in, password reset/update, sign-out, and compatibility routing for `/protected`.
