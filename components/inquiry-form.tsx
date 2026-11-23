@@ -135,8 +135,11 @@ export function InquiryForm({ creatorPublicId, creatorSlug, siteKey }: {
         <div hidden aria-hidden="true"><label htmlFor="inquiry-website">Leave this field empty</label>
           <input id="inquiry-website" name="website" tabIndex={-1} autoComplete="off" value={fields.website} onChange={e => edit("website", e.target.value)} /></div>
         <div ref={challenge} aria-label="Spam protection verification" />
-        <p className="text-xs text-muted-foreground">Spam protection is provided by Cloudflare Turnstile. Preparing verification contacts Cloudflare; submitting shares your contact details and proposal with the creator. A reply is not guaranteed.</p>
-        <p className="text-xs text-muted-foreground">Your inquiry is scheduled for deletion from CollabFlow&apos;s active database after 180 days. Deletion happens during scheduled cleanup and may take longer if maintenance is delayed. Backup copies follow the backup retention policy.</p>
+        <div className="space-y-2 rounded-lg border bg-muted/40 p-3.5 text-xs leading-relaxed text-muted-foreground">
+          <p>Submitting this form stores your name, email address, optional company, and collaboration proposal and makes them available to the intended creator for reviewing your proposal. A reply is not guaranteed.</p>
+          <p>New inquiries follow a 180-day retention policy in CollabFlow&apos;s active database. Automatic deletion happens through scheduled cleanup after the 180-day retention deadline and may not occur at exactly 180 days.</p>
+          <p>Spam protection is provided by Cloudflare Turnstile. Preparing verification contacts Cloudflare.</p>
+        </div>
         <Button type="submit" disabled={!ready || pending}>{pending ? "Sending…" : token ? "Send inquiry" : "Prepare verification"}</Button>
       </fieldset>
       {feedback && <p ref={notice} tabIndex={-1} role="alert" className="text-sm">{feedback}</p>}

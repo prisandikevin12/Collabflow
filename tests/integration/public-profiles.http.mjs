@@ -79,11 +79,17 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
       assert.match(html, /inquiry-email/);
       assert.match(html, /inquiry-message/);
       assert.match(html, /Prepare verification/);
-      assert.match(html, /after 180 days/);
-      assert.match(html, /Backup copies follow the backup retention policy/);
+      assert.match(html, /name, email address, optional company, and collaboration proposal/);
+      assert.match(html, /available to the intended creator for reviewing your proposal/);
+      assert.match(html, /180-day retention policy/);
+      assert.match(html, /scheduled cleanup after the 180-day retention deadline and may not occur at exactly 180 days/);
+      assert.match(html, /Cloudflare Turnstile/);
+      assert.doesNotMatch(html, /backup retention policy|privacy policy/i);
+      assert.doesNotMatch(html, /href="[^"]*(?:privacy|terms|policy)[^"]*"/i);
       assert.match(html, /fixture-site-key/);
     } else {
-      assert.doesNotMatch(html, /Propose a collaboration|fixture-site-key/);
+      assert.match(html, /Collaboration inquiries aren’t available yet\.|Collaboration inquiries aren&#x27;t available yet\./);
+      assert.doesNotMatch(html, /Propose a collaboration|180-day retention policy|fixture-site-key/);
     }
     assert.ok(requests.length > 0, "fixture must receive the database lookup");
     assert.ok(requests.every(r => r.path === "/rest/v1/creator_public_profiles" && r.select === "public_id,slug,display_name,bio"));
