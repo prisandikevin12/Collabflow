@@ -26,6 +26,13 @@ test("success requires a valid receipt and HTTP 200", () => {
   assert.match(inquiryFeedback(429), /24 hours/);
 });
 
+test("inquiry form submits to same-origin /api/inquiries with same-origin credentials", () => {
+  const form = readFileSync(new URL("../components/inquiry-form.tsx", import.meta.url), "utf8");
+  assert.match(form, /fetch\("\/api\/inquiries"/);
+  assert.match(form, /credentials:\s*"same-origin"/);
+  assert.doesNotMatch(form, /credentials:\s*"(?:omit|include)"/);
+});
+
 test("inquiry form disclosure accurately states collected data, 180-day scheduled cleanup, and avoids unpublished policy links", () => {
   const form = readFileSync(new URL("../components/inquiry-form.tsx", import.meta.url), "utf8");
   assert.match(form, /name, email address, optional company, and collaboration proposal/);

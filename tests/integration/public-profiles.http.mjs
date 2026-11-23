@@ -232,10 +232,12 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
     assert.equal(target.search, "?error=invalid_link");
   });
   await t.test("inquiry endpoint enforces feature flag and non-POST requests cannot read data", async () => {
-    const response = await fetch(`${base}/api/inquiries`, { method: "POST", redirect: "manual", body: "{}" });
-    assert.equal(response.status, inquiriesEnabled ? 403 : 404);
-    assert.equal(response.headers.get("location"), null);
-    assertUncached(response);
+    for (const extraHeaders of [{}, { cookie: "ordinary=cookie; sb-127-auth-token=forged" }]) {
+      const response = await fetch(`${base}/api/inquiries`, { method: "POST", headers: extraHeaders, redirect: "manual", body: "{}" });
+      assert.equal(response.status, inquiriesEnabled ? 403 : 404);
+      assert.equal(response.headers.get("location"), null);
+      assertUncached(response);
+    }
     for (const method of ["GET", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS"]) {
       const rejected = await fetch(`${base}/api/inquiries`, { method, redirect: "manual" });
       assert.equal(rejected.status, 405);
@@ -252,10 +254,12 @@ test(`production HTTP public profiles and protected routes (inquiries ${inquirie
     for (const [body, overrides, status] of [
       ["{", {}, 400],
       [JSON.stringify(data), { origin: "https://attacker.example" }, 403],
+      [JSON.stringify(data), { origin: "https://attacker.example", cookie: "ordinary=cookie" }, 403],
       [JSON.stringify(data), { "x-vercel-forwarded-for": "", "x-forwarded-for": "203.0.113.1" }, 503],
       [JSON.stringify({ ...data, website: "bot.example" }), {}, 400],
       [JSON.stringify({ ...data, owner_id: privateId }), {}, 400],
-      [JSON.stringify(data), {}, 503], // No writer credential: never fall back to an elevated key.
+      [JSON.stringify(data), { "sec-fetch-site": "same-origin" }, 503], // Anonymous POST reaches fail-closed DB boundary, never 401/307.
+      [JSON.stringify(data), { "sec-fetch-site": "same-origin", cookie: "ordinary=cookie; sb-127-auth-token=forged" }, 503], // Same-origin cookies preserve validation and never create session cookies.
     ]) {
       const response = await fetch(`${base}/api/inquiries`, { method: "POST", headers: { ...headers, ...overrides }, body, redirect: "manual" });
       assert.equal(response.status, status);

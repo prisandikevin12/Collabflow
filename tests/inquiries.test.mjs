@@ -160,6 +160,28 @@ test("lost-response retry returns its receipt without re-verifying a consumed to
   assert.deepEqual(d.calls.map(call => call[0]), ["begin"]);
 });
 
+test("cookies are neither required nor trusted for inquiry authorization and never produce session cookies", async () => {
+  const cookieHeader = { cookie: "sb-session=fake-token; other=value", "sec-fetch-site": "same-origin" };
+  const badOrigin = dependencies();
+  const rejected = await handleInquiry(request(input, { ...cookieHeader, origin: "https://attacker.example" }), config, badOrigin.store, badOrigin.verify);
+  assert.equal(rejected.status, 403);
+  assert.equal(rejected.headers.get("set-cookie"), null);
+  assert.deepEqual(badOrigin.calls, []);
+
+  const unverified = dependencies({ verified: false });
+  const failedTurnstile = await handleInquiry(request(input, cookieHeader), config, unverified.store, unverified.verify);
+  assert.equal(failedTurnstile.status, 403);
+  assert.equal(failedTurnstile.headers.get("set-cookie"), null);
+  assert.deepEqual(unverified.calls.map(call => call[0]), ["begin", "verify"]);
+
+  const ok = dependencies();
+  const accepted = await handleInquiry(request(input, cookieHeader), config, ok.store, ok.verify);
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.headers.get("set-cookie"), null);
+  assert.deepEqual(ok.calls.map(call => call[0]), ["begin", "verify", "finish"]);
+  assert.ok(!JSON.stringify(ok.calls).includes("sb-session"));
+});
+
 test("upstream exceptions and malformed database successes never leak details or report success", async () => {
   const response = await handleInquiry(request(), config, () => { throw Error("postgres://credentials@private-host sender@example.test"); });
   assert.equal(response.status, 503);

@@ -89,7 +89,7 @@ export function InquiryForm({ creatorPublicId, creatorSlug, siteKey }: {
     try {
       const response = await fetch("/api/inquiries", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        credentials: "omit", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(20000),
+        credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(20000),
         body: JSON.stringify({ ...fields, creatorPublicId, creatorSlug,
           submissionId: attempt.snapshot.id, turnstileToken: token }),
       });
